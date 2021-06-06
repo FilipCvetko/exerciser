@@ -11,13 +11,15 @@ from multiprocessing import Process, Queue
 import cv2
 import numpy as np
 from config import *
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 
 from mark_detector import MarkDetector
 from os_detector import detect_os
 from pose_estimator import PoseEstimator
 from stabilizer import Stabilizer
 
-print("OpenCV version: {}".format(cv2.__version__))
+#print("OpenCV version: {}".format(cv2.__version__))
 
 # multiprocessing may not work on Windows and macOS, check OS for safety.
 detect_os()
@@ -40,12 +42,14 @@ def get_face(detector, img_queue, box_queue):
         box = detector.extract_cnn_facebox(image)
         box_queue.put(box)
 
-def main():
+def get_score(thresh0=default_threshold0, thresh1=default_threshold1, thresh2=default_threshold2, mode=2):
     """MAIN"""
+    # mode 1 - user set up
+    # mode 2 - exercise checker
     # Video source from webcam or video file.
     video_src = args.cam if args.cam is not None else args.video
     if video_src is None:
-        print("Warning: video source not assigned, default webcam will be used.")
+        #print("Warning: video source not assigned, default webcam will be used.")
         video_src = 0
 
     cap = cv2.VideoCapture(video_src)
@@ -94,10 +98,6 @@ def main():
         if frame_got is False:
             break
 
-        if cv2.waitKey(33) == 27:
-            # Escape pressed
-            return int(score)
-
         # Crop it if frame is larger than expected.
         # frame = frame[0:480, 300:940]
 
@@ -144,32 +144,34 @@ def main():
             list0.append(float(pose[0][0]))
             list1.append(float(pose[0][1]))
             list2.append(float(pose[0][2]))
-
-            print(score)
             
             if len(list0) % 5 == 0:
                 dev0 = max(list0) - min(list0)
                 dev1 = max(list1) - min(list1)
                 dev2 = max(list2) - min(list2)
-                
-                if flag0 == False and dev0 > threshold0:
-                    print("You have rotated head left and right! Congrats!")
-                    score += reward_head_task
-                    flag0 = True
-		        
-                if flag1 == False and dev1 > threshold1:
-                    print("You have moved head forwards and backwards! Congrats!")
-                    score += reward_head_task
-                    flag1 = True
-		        
-                if flag2 == False and dev2 > threshold2:
-                    print("You have tilted head left and right! Congrats!")
-                    score += reward_head_task
-                    flag2 = True
+
+                if mode == 2:
+                    if flag0 == False and dev0 > thresh0:
+                        print("You have rotated head left and right! Congrats!")
+                        score += reward_head_task
+                        flag0 = True
                     
-                if flag0 and flag1 and flag2:
-                    print("ALL HEAD TASKS COMPLETED")
-                    return int(score)
+                    if flag1 == False and dev1 > thresh1:
+                        print("You have moved head forwards and backwards! Congrats!")
+                        score += reward_head_task
+                        flag1 = True
+                    
+                    if flag2 == False and dev2 > thresh2:
+                        print("You have tilted head left and right! Congrats!")
+                        score += reward_head_task
+                        flag2 = True
+                        
+                    if flag0 and flag1 and flag2:
+                        print("ALL HEAD TASKS COMPLETED")
+                        cv2.destroyAllWindows()
+                        break
+
+            
             
             # pose[0] = left, right rotation
             # pose[1] = flexion, extension upward or backward
@@ -186,12 +188,12 @@ def main():
             steady_pose = np.reshape(steady_pose, (-1, 3))
 
             # Uncomment following line to draw pose annotation on frame.
-            # pose_estimator.draw_annotation_box(
-            #     frame, pose[0], pose[1], color=(255, 128, 128))
+            pose_estimator.draw_annotation_box(
+                frame, pose[0], pose[1], color=(255, 128, 128))
 
             # Uncomment following line to draw stabile pose annotation on frame.
-            pose_estimator.draw_annotation_box(
-                frame, steady_pose[0], steady_pose[1], color=(128, 255, 128))
+            #pose_estimator.draw_annotation_box(
+            #    frame, steady_pose[0], steady_pose[1], color=(128, 255, 128))
 
             # Uncomment following line to draw head axes on frame.
             # pose_estimator.draw_axes(frame, steady_pose[0], steady_pose[1])
@@ -199,12 +201,19 @@ def main():
         # Show preview.
         cv2.imshow("Preview", frame)
         if cv2.waitKey(10) == 27:
+            cv2.destroyAllWindows()
             break
+
 
     # Clean up the multiprocessing process.
     box_process.terminate()
     box_process.join()
 
+    if mode == 2:
+        return int(score)
+    elif mode == 1:
+        return (dev0, dev1, dev2)
+
 
 if __name__ == '__main__':
-    main()
+    get_score()

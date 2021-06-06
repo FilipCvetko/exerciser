@@ -1,0 +1,12 @@
+[Unit]
+Description=Makes me do head workout periodically throughout the day.
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=sudo /home/filip/IT/.envs/head/bin /home/filip/IT/projects/exerciser/master.py >> /var/log/exerciser/logs.log
+StandardOutput=append:/var/log/blocker/logs.log
+StandardError=append:/var/log/blocker/logs.log
+
+[Install]
+WantedBy=multi-user.target
